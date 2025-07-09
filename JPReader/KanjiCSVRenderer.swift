@@ -23,7 +23,8 @@ class KanjiCSVRenderer {
         }
     }
     
-    func generate1bppBMP(for index: Int) -> Data? {
+    func generate1bppBMP(for index: Int, printanswer: Bool = true) -> Data? {
+
         guard index >= 0, index < entries.count else { return nil }
         let entry = entries[index]
         
@@ -55,9 +56,10 @@ class KanjiCSVRenderer {
         
         entry.kanji.draw(in: CGRect(x: 0, y: 0, width: 136, height: 136), withAttributes: kanjiAttr)
         entry.word.draw(in: CGRect(x: 150, y: 20, width: 320, height: 30), withAttributes: textAttr)
-        entry.hiragana.draw(in: CGRect(x: 150, y: 60, width: 320, height: 30), withAttributes: textAttr)
-        entry.meaning.draw(in: CGRect(x: 150, y: 100, width: 320, height: 30), withAttributes: textAttr)
-        
+        if(printanswer) {
+            entry.hiragana.draw(in: CGRect(x: 150, y: 60, width: 320, height: 30), withAttributes: textAttr)
+            entry.meaning.draw(in: CGRect(x: 150, y: 100, width: 320, height: 30), withAttributes: textAttr)
+        }
         UIGraphicsPopContext()
         
         guard let grayData = context.data else { return nil }

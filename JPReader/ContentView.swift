@@ -31,6 +31,8 @@ struct ContentView: View {
     @State private var currentIndex = 0
     @State private var renderer: KanjiCSVRenderer? = nil
     
+    @State var ans = false
+    
     let audioURL = URL("https://41j.com/jpexperiments/lazyjack/tts.mp3")!
     
     // NEW: background-safe timer
@@ -325,10 +327,13 @@ struct ContentView: View {
                 return
             }
             print("Sending BMP \(currentIndex)/\(renderer.entries.count)")
-            if let bmpData = renderer.generate1bppBMP(for: currentIndex) {
+
+            
+            if ans == true {ans=false} else {ans=true}
+            if let bmpData = renderer.generate1bppBMP(for: currentIndex, printanswer: ans) {
                 bleManager.sendImage(bmpData, to: "Both")
             }
-            currentIndex += 1
+            if ans == true {currentIndex += 1}
         }
         bleTimer = timer
         timer.resume()
