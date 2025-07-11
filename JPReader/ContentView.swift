@@ -33,9 +33,8 @@ struct ContentView: View {
     
     @State var ans = false
     
-    let audioURL = URL("https://41j.com/jpexperiments/lazyjack/tts.mp3")!
+    @State private var baseURLString: String = "https://41j.com/jpexperiments/lazyjack/"
     
-    // NEW: background-safe timer
     @State private var bleTimer: DispatchSourceTimer? = nil
     
     var body: some View {
@@ -43,6 +42,28 @@ struct ContentView: View {
             Color.black.ignoresSafeArea()
             
             VStack(spacing: 20) {
+                
+                HStack {
+                    Button("Lazy Jack") {
+                        baseURLString = "https://41j.com/jpexperiments/lazyjack/"
+                        setupPlayer()
+                        loadSubtitles()
+                    }
+                    .padding()
+                    .background(Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(8)
+                    
+                    Button("Anathem") {
+                        baseURLString = "https://41j.com/jpexperiments/anathem1/"
+                        setupPlayer()
+                        loadSubtitles()
+                    }
+                    .padding()
+                    .background(Color.orange)
+                    .foregroundColor(.white)
+                    .cornerRadius(8)
+                }
                 
                 VStack(spacing: 10) {
                     if duration > 0 {
@@ -87,7 +108,6 @@ struct ContentView: View {
                     VStack {
                         Button("Connect Glasses") {
                             if let (key, pair) = bleManager.discoveredPairs.first(where: { $0.value.left != nil || $0.value.right != nil }) {
-                                print("Connecting to \(key)")
                                 bleManager.connectPair(pair: pair)
                             } else {
                                 print("No G1 glasses discovered yet.")
@@ -97,7 +117,6 @@ struct ContentView: View {
                     }
                     .onChange(of: bleManager.isFullyReady) { ready in
                         if ready {
-                            print("BLE ready, clearing previous state…")
                             bleManager.clear()
                         }
                     }
@@ -111,9 +130,7 @@ struct ContentView: View {
                     .cornerRadius(10)
                     
                     Button("Bright Down") {
-                        if(bright > 0) {
-                            bright-=1
-                        }
+                        if bright > 0 { bright -= 1 }
                         bleManager.brightness(bright)
                     }
                     .padding()
@@ -122,17 +139,13 @@ struct ContentView: View {
                     .cornerRadius(10)
                     
                     Button("Bright Up") {
-                        if(bright < 255) {
-                            bright+=1
-                        }
+                        if bright < 255 { bright += 1 }
                         bleManager.brightness(bright)
                     }
                     .padding()
                     .background(Color.green)
                     .foregroundColor(.white)
                     .cornerRadius(10)
-
-                    
                 }
             }
         }
@@ -160,10 +173,8 @@ struct ContentView: View {
     }
     
     func loadSubtitles() {
-        let base = "https://41j.com/jpexperiments/lazyjack/"
-        
         func fetch(_ filename: String, completion: @escaping ([Subtitle]) -> Void) {
-            guard let url = URL(string: base + filename) else { return }
+            guard let url = URL(string: baseURLString + filename) else { return }
             URLSession.shared.dataTask(with: url) { data, _, _ in
                 if let data = data, let srtString = String(data: data, encoding: .utf8) {
                     let parsed = parseSRT(srtString)
@@ -174,49 +185,137 @@ struct ContentView: View {
             }.resume()
         }
         
-        fetch("tts_fixed_aligned_onlykanji.srt") { subtitles = $0 }
-        fetch("tts_fixed_aligned_onlykanji_hira.srt") { subtitlesHiragana = $0 }
-        fetch("tts_fixed_aligned_onlykanji_eigo.srt") { subtitlesEigo = $0 }
+        fetch("tts_final_kanjionly.srt") { subtitles = $0 }
+        fetch("tts_final_kanjionly_hira.srt") { subtitlesHiragana = $0 }
+        fetch("tts_final_kanjionly_eigo.srt") { subtitlesEigo = $0 }
+    }
+    
+    func setupPlayer() {
+        guard let url = URL(string: baseURLString + "tts.mp3") else { return }
+        
+        player = AVPlayer(url: url)
+        let interval = CMTime(seconds: 0.1, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
+        player?.addPeriodicTimeObserver(forInterval: interval, queue: .main) { time in
+            currentTime = time.seconds
+            if let item = player?.currentItem {
+                duration = item.duration.seconds
+            }
+            updateSubtitle(at: currentTime)
+        }
     }
     
     func updateSubtitle(at time: TimeInterval) {
-        guard let currentIndex = subtitles.firstIndex(where: { time >= $0.start && time <= $0.end }) else {
-            return
-        }
-        
-        let active = subtitles[currentIndex]
-        
-        if displayedSubtitles.contains(where: { $0.index == active.index }) {
-            return
-        }
-        
-        displayedSubtitles[subtitleCounter % 5] = active
-        subtitleCounter += 1
-        
-        if subtitlesHiragana.indices.contains(currentIndex) {
-            let h = subtitlesHiragana[currentIndex]
-            displayedHiragana[counterHiragana % 5] = h
-            counterHiragana += 1
-        }
-        
-        if subtitlesEigo.indices.contains(currentIndex) {
-            let e = subtitlesEigo[currentIndex]
-            displayedEigo[counterEigo % 5] = e
-            counterEigo += 1
-        }
-        
-        if bleManager.isFullyReady {
-            let lines = zip(zip(displayedSubtitles, displayedHiragana), displayedEigo).map {
-                "\($0.0.0.text):\($0.0.1.text):\($0.1.text)"
-            }
-            let result = lines.joined(separator: "\n")
-            print("sending: \(result)")
-            bleManager.sendText(text: result, counter: 1)
-        }
-    }
+          guard let currentIndex = subtitles.firstIndex(where: { time >= $0.start && time <= $0.end }) else {
+              return
+          }
+          
+          let active = subtitles[currentIndex]
+          
+          if displayedSubtitles.contains(where: { $0.index == active.index }) {
+              return
+          }
+          
+          displayedSubtitles[subtitleCounter % 5] = active
+          subtitleCounter += 1
+          
+          if subtitlesHiragana.indices.contains(currentIndex) {
+              let h = subtitlesHiragana[currentIndex]
+              displayedHiragana[counterHiragana % 5] = h
+              counterHiragana += 1
+          }
+          
+          if subtitlesEigo.indices.contains(currentIndex) {
+              let e = subtitlesEigo[currentIndex]
+              displayedEigo[counterEigo % 5] = e
+              counterEigo += 1
+          }
+          
+          if bleManager.isFullyReady {
+              let lines = zip(zip(displayedSubtitles, displayedHiragana), displayedEigo).map {
+                  "\($0.0.0.text):\($0.0.1.text):\($0.1.text)"
+              }
+              let result = lines.joined(separator: "\n")
+              print("sending: \(result)")
+              bleManager.sendText(text: result, counter: 1)
+          }
+      }
     
     func isActive(_ sub: Subtitle) -> Bool {
         currentTime >= sub.start && currentTime <= sub.end
+    }
+    
+    func togglePlayPause() {
+        guard let player = player else { return }
+        isPlaying ? player.pause() : player.play()
+        isPlaying.toggle()
+    }
+    
+    func seekToTime(_ time: Double) {
+        let cmTime = CMTime(seconds: time, preferredTimescale: 600)
+        player?.seek(to: cmTime)
+    }
+    
+    func formatTime(_ time: Double) -> String {
+        guard time.isFinite else { return "--:--" }
+        let totalSeconds = Int(time)
+        let minutes = (totalSeconds % 3600) / 60
+        let seconds = totalSeconds % 60
+        return String(format: "%02d:%02d", minutes, seconds)
+    }
+    
+    func startBLETicker() {
+        stopBLETicker()
+        currentIndex = 0
+        
+        fetchCSV(from: baseURLString + "subtitles_unique.csv") { csvString in
+            print("Fetching CSV",baseURLString + "subtitles_unqiue.csv")
+            let shuffledCSV = randomizeCSVRows(csvString, hasHeader: true)
+            renderer = KanjiCSVRenderer(csvString: shuffledCSV)
+            startBLETimer()
+        }
+    }
+    
+    func fetchCSV(from urlString: String, completion: @escaping (String) -> Void) {
+        guard let url = URL(string: urlString) else { return }
+        
+        var request = URLRequest(url: url)
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+        request.setValue("no-cache", forHTTPHeaderField: "Pragma")
+        
+        URLSession.shared.dataTask(with: request) { data, _, _ in
+            guard let data = data, let csvString = String(data: data, encoding: .utf8) else { return }
+            DispatchQueue.main.async {
+                completion(csvString)
+            }
+        }.resume()
+    }
+
+    
+    func startBLETimer() {
+        guard let renderer = renderer else { return }
+        let queue = DispatchQueue(label: "ble.timer.queue", qos: .background)
+        let timer = DispatchSource.makeTimerSource(queue: queue)
+        timer.schedule(deadline: .now(), repeating: 10)
+        timer.setEventHandler { [weak bleManager, weak renderer] in
+            guard let bleManager = bleManager, let renderer = renderer else { return }
+            if currentIndex >= renderer.entries.count {
+                stopBLETicker()
+                return
+            }
+            if ans { ans = false } else { ans = true }
+            if let bmpData = renderer.generate1bppBMP(for: currentIndex, printanswer: ans) {
+                bleManager.sendImage(bmpData, to: "Both")
+            }
+            if ans { currentIndex += 1 }
+        }
+        bleTimer = timer
+        timer.resume()
+    }
+    
+    func stopBLETicker() {
+        bleTimer?.cancel()
+        bleTimer = nil
     }
     
     func configureAudioSession() {
@@ -229,64 +328,10 @@ struct ContentView: View {
         }
     }
     
-    func setupPlayer() {
-        print("Attempting to load audio from:", audioURL)
-        
-        player = AVPlayer(url: audioURL)
-        
-        let interval = CMTime(seconds: 0.1, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
-        player?.addPeriodicTimeObserver(forInterval: interval, queue: .main) { time in
-            currentTime = time.seconds
-            if let item = player?.currentItem {
-                duration = item.duration.seconds
-            }
-            updateSubtitle(at: currentTime)
-        }
-    }
-    
-    func togglePlayPause() {
-        guard let player = player else { return }
-        if isPlaying {
-            player.pause()
-        } else {
-            player.play()
-        }
-        isPlaying.toggle()
-    }
-    
-    func seekToTime(_ time: Double) {
-        let cmTime = CMTime(seconds: time, preferredTimescale: 600)
-        player?.seek(to: cmTime)
-    }
-    
-    func formatTime(_ time: Double) -> String {
-        guard time.isFinite else { return "--:--" }
-        
-        let totalSeconds = Int(time)
-        let hours = totalSeconds / 3600
-        let minutes = (totalSeconds % 3600) / 60
-        let seconds = totalSeconds % 60
-        
-        if hours > 0 {
-            return String(format: "%01d:%02d:%02d", hours, minutes, seconds)
-        } else {
-            return String(format: "%02d:%02d", minutes, seconds)
-        }
-    }
-    
-    
-    /// Randomizes the rows of a CSV string.
-    /// - Parameters:
-    ///   - csvString: The input CSV string.
-    ///   - hasHeader: Whether to preserve the first line as a header.
-    /// - Returns: A new CSV string with rows shuffled.
     func randomizeCSVRows(_ csvString: String, hasHeader: Bool = true) -> String {
         var rows = csvString.components(separatedBy: .newlines).filter { !$0.isEmpty }
         
-        guard !rows.isEmpty else {
-            print("CSV appears to be empty.")
-            return csvString
-        }
+        guard !rows.isEmpty else { return csvString }
         
         if hasHeader {
             let header = rows.first!
@@ -298,63 +343,8 @@ struct ContentView: View {
             return rows.joined(separator: "\n")
         }
     }
-
-    
-    // MARK: - BLE Background Timer
-    
-    func startBLETicker() {
-        stopBLETicker()
-        currentIndex = 0
-        
-        if renderer == nil {
-            guard let url = Bundle.main.url(forResource: "words", withExtension: "csv"),
-                  let csvString = try? String(contentsOf: url, encoding: .utf8) else {
-                print("Failed to load words.csv")
-                return
-            }
-            let shuffledCSV = randomizeCSVRows(csvString, hasHeader: true)
-            renderer = KanjiCSVRenderer(csvString: shuffledCSV)
-        }
-        
-        let queue = DispatchQueue(label: "ble.timer.queue", qos: .background)
-        let timer = DispatchSource.makeTimerSource(queue: queue)
-        timer.schedule(deadline: .now(), repeating: 7.0)
-        timer.setEventHandler { [weak bleManager, weak renderer] in
-            guard let bleManager = bleManager, let renderer = renderer else { return }
-            if currentIndex >= renderer.entries.count {
-                print("Finished sending all BMPs.")
-                stopBLETicker()
-                return
-            }
-            print("Sending BMP \(currentIndex)/\(renderer.entries.count)")
-
-            
-            if ans == true {ans=false} else {ans=true}
-            if let bmpData = renderer.generate1bppBMP(for: currentIndex, printanswer: ans) {
-                bleManager.sendImage(bmpData, to: "Both")
-            }
-            if ans == true {currentIndex += 1}
-        }
-        bleTimer = timer
-        timer.resume()
-    }
-    
-    func stopBLETicker() {
-        bleTimer?.cancel()
-        bleTimer = nil
-    }
-    
-    // MARK: - App Lifecycle
     
     func observeAppLifecycle() {
-        NotificationCenter.default.addObserver(forName: UIApplication.willTerminateNotification, object: nil, queue: .main) { _ in
-            stopBLETicker()
-        }
-        NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { _ in
-            print("App entered background, BLE timer should continue.")
-        }
-        NotificationCenter.default.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { _ in
-            print("App entered foreground.")
-        }
+        NotificationCenter.default.addObserver(forName: UIApplication.willTerminateNotification, object: nil, queue: .main) { _ in stopBLETicker() }
     }
 }
