@@ -15,6 +15,8 @@ struct ContentView: View {
     @State private var isPlaying = false
     
     @State private var bright: UInt8 = 15
+    @State private var playbackRate: Float = 1.0
+
     
     @State private var subtitles: [Subtitle] = []
     @State private var displayedSubtitles: [Subtitle] = Array(repeating: Subtitle(index: 0, start: 0, end: 0, text: ""), count: 5)
@@ -54,8 +56,28 @@ struct ContentView: View {
                     .foregroundColor(.white)
                     .cornerRadius(8)
                     
-                    Button("Anathem") {
+                    Button("Anathem 1") {
                         baseURLString = "https://41j.com/jpexperiments/anathem1/"
+                        setupPlayer()
+                        loadSubtitles()
+                    }
+                    .padding()
+                    .background(Color.orange)
+                    .foregroundColor(.white)
+                    .cornerRadius(8)
+                    
+                    Button("Anathem 2") {
+                        baseURLString = "https://41j.com/jpexperiments/anathem2/"
+                        setupPlayer()
+                        loadSubtitles()
+                    }
+                    .padding()
+                    .background(Color.orange)
+                    .foregroundColor(.white)
+                    .cornerRadius(8)
+                    
+                    Button("Anathem 3") {
+                        baseURLString = "https://41j.com/jpexperiments/anathem3/"
                         setupPlayer()
                         loadSubtitles()
                     }
@@ -86,6 +108,29 @@ struct ContentView: View {
                     .foregroundColor(.white)
                     .background(Color.gray.opacity(0.2))
                     .clipShape(Capsule())
+                    
+                    HStack(spacing: 20) {
+                            Button("Slower") {
+                                playbackRate = max(0.25, playbackRate - 0.25)
+                                player?.rate = isPlaying ? playbackRate : 0
+                            }
+                            .padding()
+                            .foregroundColor(.white)
+                            .background(Color.gray.opacity(0.2))
+                            .clipShape(Capsule())
+                            
+                            Text(String(format: "Speed: %.2fx", playbackRate))
+                                .foregroundColor(.white)
+                            
+                            Button("Faster") {
+                                playbackRate = min(2.0, playbackRate + 0.25)
+                                player?.rate = isPlaying ? playbackRate : 0
+                            }
+                            .padding()
+                            .foregroundColor(.white)
+                            .background(Color.gray.opacity(0.2))
+                            .clipShape(Capsule())
+                        }
                 }
                 .padding()
                 .onAppear {
@@ -246,9 +291,14 @@ struct ContentView: View {
     
     func togglePlayPause() {
         guard let player = player else { return }
-        isPlaying ? player.pause() : player.play()
+        if isPlaying {
+            player.pause()
+        } else {
+            player.rate = playbackRate
+        }
         isPlaying.toggle()
     }
+
     
     func seekToTime(_ time: Double) {
         let cmTime = CMTime(seconds: time, preferredTimescale: 600)
